@@ -68,6 +68,26 @@ export default {
 				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)'
 			},
+			backgroundImage: {
+				'gradient-primary': 'var(--gradient-primary)',
+				'gradient-secondary': 'var(--gradient-secondary)',
+				'gradient-accent': 'var(--gradient-accent)',
+			},
+			backdropBlur: {
+				'glass': '12px',
+			},
+			backgroundColor: {
+				'glass': 'var(--glass-bg)',
+			},
+			borderColor: {
+				'glass': 'var(--glass-border)',
+			},
+			boxShadow: {
+				'glow': 'var(--shadow-glow)',
+			},
+			transitionProperty: {
+				'smooth': 'var(--transition-smooth)',
+			},
 			keyframes: {
 				'accordion-down': {
 					from: {
