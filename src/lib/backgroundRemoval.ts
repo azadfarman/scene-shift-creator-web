@@ -11,7 +11,7 @@ export const removeBackground = async (imageElement: HTMLImageElement, onProgres
     console.log('Starting background removal process...');
     
     onProgress(30);
-    const segmenter = await pipeline('image-segmentation', 'Xenova/rembg-new', {
+    const segmenter = await pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512', {
       device: 'webgpu',
     });
     
