@@ -35,9 +35,12 @@ export default function ImageComposer({ foregroundBlob, backgroundUrl, originalF
       const bgImg = new Image();
       bgImg.crossOrigin = 'anonymous';
       
-      await new Promise((resolve, reject) => {
-        bgImg.onload = resolve;
-        bgImg.onerror = reject;
+      await new Promise<void>((resolve, reject) => {
+        bgImg.onload = () => resolve();
+        bgImg.onerror = (e) => {
+          console.error('Background image load error:', e);
+          reject(new Error('Failed to load background image'));
+        };
         bgImg.src = backgroundUrl;
       });
 
@@ -45,9 +48,12 @@ export default function ImageComposer({ foregroundBlob, backgroundUrl, originalF
       const fgImg = new Image();
       const fgUrl = URL.createObjectURL(foregroundBlob);
       
-      await new Promise((resolve, reject) => {
-        fgImg.onload = resolve;
-        fgImg.onerror = reject;
+      await new Promise<void>((resolve, reject) => {
+        fgImg.onload = () => resolve();
+        fgImg.onerror = (e) => {
+          console.error('Foreground image load error:', e);
+          reject(new Error('Failed to load foreground image'));
+        };
         fgImg.src = fgUrl;
       });
 
