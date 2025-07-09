@@ -1,27 +1,40 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, RotateCcw, Move, ZoomIn, ZoomOut } from 'lucide-react';
+import { Download, RotateCcw, Move, ZoomIn, ZoomOut, Eye, Grid3X3 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdvancedSettings } from './AdvancedControls';
 
 interface ImageComposerProps {
   foregroundBlob: Blob | null;
   backgroundUrl: string | null;
   originalFile: File | null;
+  advancedSettings?: AdvancedSettings;
 }
 
-export default function ImageComposer({ foregroundBlob, backgroundUrl, originalFile }: ImageComposerProps) {
+export interface ImageComposerRef {
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
+const ImageComposer = forwardRef<ImageComposerRef, ImageComposerProps>(
+  ({ foregroundBlob, backgroundUrl, originalFile, advancedSettings }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [showGrid, setShowGrid] = useState(false);
+  const [showEdges, setShowEdges] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+  }));
 
   useEffect(() => {
     if (foregroundBlob && backgroundUrl) {
       composeImage();
     }
-  }, [foregroundBlob, backgroundUrl, scale, position]);
+  }, [foregroundBlob, backgroundUrl, scale, position, advancedSettings, showGrid, showEdges]);
 
   const composeImage = async () => {
     if (!canvasRef.current || !foregroundBlob || !backgroundUrl) return;
@@ -64,20 +77,111 @@ export default function ImageComposer({ foregroundBlob, backgroundUrl, originalF
       // Draw background
       ctx.drawImage(bgImg, 0, 0);
 
+      // Apply advanced settings to background if needed
+      if (advancedSettings) {
+        applyAdvancedSettings(ctx, canvas.width, canvas.height, advancedSettings);
+      }
+
       // Calculate foreground position and size
       const fgWidth = fgImg.width * scale;
       const fgHeight = fgImg.height * scale;
-      const fgX = (canvas.width - fgWidth) / 2 + position.x;
-      const fgY = (canvas.height - fgHeight) / 2 + position.y;
+      let fgX = (canvas.width - fgWidth) / 2 + position.x;
+      let fgY = (canvas.height - fgHeight) / 2 + position.y;
+
+      // Apply snap to grid if enabled
+      if (advancedSettings?.snapToGrid) {
+        const gridSize = 20;
+        fgX = Math.round(fgX / gridSize) * gridSize;
+        fgY = Math.round(fgY / gridSize) * gridSize;
+      }
+
+      // Set blend mode and opacity
+      if (advancedSettings?.blendMode && advancedSettings.blendMode !== 'normal') {
+        ctx.globalCompositeOperation = advancedSettings.blendMode as GlobalCompositeOperation;
+      }
+      if (advancedSettings?.opacity !== undefined) {
+        ctx.globalAlpha = advancedSettings.opacity / 100;
+      }
 
       // Draw foreground
       ctx.drawImage(fgImg, fgX, fgY, fgWidth, fgHeight);
+
+      // Reset composition settings
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+
+      // Draw grid overlay if enabled
+      if (showGrid) {
+        drawGrid(ctx, canvas.width, canvas.height);
+      }
+
+      // Draw edge detection overlay if enabled
+      if (showEdges && advancedSettings?.edgeDetection) {
+        drawEdgeOverlay(ctx, fgImg, fgX, fgY, fgWidth, fgHeight);
+      }
 
       URL.revokeObjectURL(fgUrl);
     } catch (error) {
       console.error('Error composing image:', error);
       toast.error('Failed to compose image');
     }
+  };
+
+  const applyAdvancedSettings = (ctx: CanvasRenderingContext2D, width: number, height: number, settings: AdvancedSettings) => {
+    if (settings.brightness !== 0 || settings.contrast !== 0 || settings.saturation !== 0) {
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        // Apply brightness
+        if (settings.brightness !== 0) {
+          data[i] = Math.max(0, Math.min(255, data[i] + settings.brightness * 2.55));
+          data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + settings.brightness * 2.55));
+          data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + settings.brightness * 2.55));
+        }
+
+        // Apply contrast
+        if (settings.contrast !== 0) {
+          const factor = (259 * (settings.contrast + 255)) / (255 * (259 - settings.contrast));
+          data[i] = Math.max(0, Math.min(255, factor * (data[i] - 128) + 128));
+          data[i + 1] = Math.max(0, Math.min(255, factor * (data[i + 1] - 128) + 128));
+          data[i + 2] = Math.max(0, Math.min(255, factor * (data[i + 2] - 128) + 128));
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    }
+  };
+
+  const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const gridSize = 20;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+
+    for (let x = 0; x <= width; x += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+
+    for (let y = 0; y <= height; y += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    ctx.setLineDash([]);
+  };
+
+  const drawEdgeOverlay = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, width: number, height: number) => {
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(x, y, width, height);
+    ctx.setLineDash([]);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -160,6 +264,20 @@ export default function ImageComposer({ foregroundBlob, backgroundUrl, originalF
             <ZoomOut className="w-4 h-4" />
           </Button>
           <Button
+            onClick={() => setShowGrid(!showGrid)}
+            variant={showGrid ? "default" : "outline"}
+            size="sm"
+          >
+            <Grid3X3 className="w-4 h-4" />
+          </Button>
+          <Button
+            onClick={() => setShowEdges(!showEdges)}
+            variant={showEdges ? "default" : "outline"}
+            size="sm"
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button
             onClick={resetTransform}
             variant="outline"
             size="sm"
@@ -172,7 +290,7 @@ export default function ImageComposer({ foregroundBlob, backgroundUrl, originalF
             size="sm"
           >
             <Download className="w-4 h-4 mr-2" />
-            Download
+            Quick Download
           </Button>
         </div>
 
@@ -195,4 +313,8 @@ export default function ImageComposer({ foregroundBlob, backgroundUrl, originalF
       </div>
     </Card>
   );
-}
+});
+
+ImageComposer.displayName = 'ImageComposer';
+
+export default ImageComposer;

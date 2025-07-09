@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import BackgroundRemover from '@/components/BackgroundRemover';
 import BackgroundGenerator from '@/components/BackgroundGenerator';
-import ImageComposer from '@/components/ImageComposer';
+import ImageComposer, { ImageComposerRef } from '@/components/ImageComposer';
+import AdvancedControls, { AdvancedSettings } from '@/components/AdvancedControls';
+import BatchProcessor from '@/components/BatchProcessor';
+import ExportStudio from '@/components/ExportStudio';
+import { useRef } from 'react';
 
 const Index = () => {
   const [processedImage, setProcessedImage] = useState<Blob | null>(null);
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings | undefined>();
+  const canvasRef = useRef<ImageComposerRef>(null);
 
   const handleImageProcessed = (imageBlob: Blob, file: File) => {
     setProcessedImage(imageBlob);
@@ -15,6 +21,10 @@ const Index = () => {
 
   const handleBackgroundGenerated = (url: string) => {
     setBackgroundUrl(url);
+  };
+
+  const handleAdvancedSettingsChange = (settings: AdvancedSettings) => {
+    setAdvancedSettings(settings);
   };
 
   return (
@@ -39,12 +49,33 @@ const Index = () => {
           <BackgroundGenerator onBackgroundGenerated={handleBackgroundGenerated} />
         </div>
 
+        {/* Advanced Controls */}
+        <div className="mb-8">
+          <AdvancedControls onSettingsChange={handleAdvancedSettingsChange} />
+        </div>
+
         {/* Image Composer */}
-        <ImageComposer 
-          foregroundBlob={processedImage}
-          backgroundUrl={backgroundUrl}
-          originalFile={originalFile}
-        />
+        <div className="mb-8">
+          <ImageComposer 
+            ref={canvasRef}
+            foregroundBlob={processedImage}
+            backgroundUrl={backgroundUrl}
+            originalFile={originalFile}
+            advancedSettings={advancedSettings}
+          />
+        </div>
+
+        {/* Professional Tools */}
+        <div className="grid lg:grid-cols-2 gap-8 mb-8">
+          {/* Batch Processor */}
+          <BatchProcessor backgroundUrl={backgroundUrl} />
+          
+          {/* Export Studio */}
+          <ExportStudio 
+            canvasRef={{ current: canvasRef.current?.getCanvas() || null }}
+            originalFileName={originalFile?.name}
+          />
+        </div>
 
         {/* Features Section */}
         <div className="mt-16">
@@ -74,9 +105,31 @@ const Index = () => {
               <div className="w-12 h-12 bg-gradient-primary rounded-full mx-auto mb-4 flex items-center justify-center">
                 <span className="text-2xl">⚡</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">Browser-Based Processing</h3>
+              <h3 className="text-xl font-semibold mb-2">Advanced Studio Tools</h3>
               <p className="text-muted-foreground">
-                All processing happens in your browser for privacy and speed
+                Professional editing with batch processing and export options
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-6 mt-8">
+            <div className="text-center p-6 rounded-lg bg-glass backdrop-blur-glass border-glass">
+              <div className="w-12 h-12 bg-gradient-primary rounded-full mx-auto mb-4 flex items-center justify-center">
+                <span className="text-2xl">🎨</span>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Color Grading Studio</h3>
+              <p className="text-muted-foreground">
+                Professional color adjustments with real-time preview
+              </p>
+            </div>
+            
+            <div className="text-center p-6 rounded-lg bg-glass backdrop-blur-glass border-glass">
+              <div className="w-12 h-12 bg-gradient-primary rounded-full mx-auto mb-4 flex items-center justify-center">
+                <span className="text-2xl">📦</span>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Batch Processing</h3>
+              <p className="text-muted-foreground">
+                Process hundreds of images simultaneously with queue management
               </p>
             </div>
           </div>
