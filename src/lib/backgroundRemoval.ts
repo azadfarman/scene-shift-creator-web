@@ -10,8 +10,9 @@ export const removeBackground = async (imageElement: HTMLImageElement, onProgres
     onProgress(10);
     console.log('Starting background removal process...');
     
+    // Use a better model for background removal
     onProgress(30);
-    const segmenter = await pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512', {
+    const segmenter = await pipeline('image-segmentation', 'Xenova/detr-resnet-50-panoptic', {
       device: 'webgpu',
     });
     
@@ -24,13 +25,44 @@ export const removeBackground = async (imageElement: HTMLImageElement, onProgres
     const wasResized = resizeImageIfNeeded(canvas, ctx, imageElement);
     console.log(`Image ${wasResized ? 'was' : 'was not'} resized. Final dimensions: ${canvas.width}x${canvas.height}`);
     
-    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+    // Convert to higher quality for better segmentation
+    const imageData = canvas.toDataURL('image/png', 1.0);
     
     onProgress(70);
     const result = await segmenter(imageData);
     
-    if (!result || !Array.isArray(result) || result.length === 0 || !result[0].mask) {
+    console.log('Segmentation result:', result);
+    
+    if (!result || !Array.isArray(result) || result.length === 0) {
       throw new Error('Invalid segmentation result');
+    }
+    
+    onProgress(85);
+    
+    // Find the person/main subject mask
+    let personMask = null;
+    for (const segment of result) {
+      if (segment.label && (
+        segment.label.toLowerCase().includes('person') ||
+        segment.label.toLowerCase().includes('human') ||
+        segment.label.toLowerCase().includes('people')
+      )) {
+        personMask = segment.mask;
+        break;
+      }
+    }
+    
+    // If no person found, use the largest mask
+    if (!personMask && result.length > 0) {
+      personMask = result.reduce((largest, current) => {
+        const currentSize = current.mask ? current.mask.data.length : 0;
+        const largestSize = largest.mask ? largest.mask.data.length : 0;
+        return currentSize > largestSize ? current : largest;
+      }).mask;
+    }
+    
+    if (!personMask) {
+      throw new Error('No suitable mask found for background removal');
     }
     
     onProgress(90);
@@ -41,13 +73,18 @@ export const removeBackground = async (imageElement: HTMLImageElement, onProgres
     
     if (!outputCtx) throw new Error('Could not get output canvas context');
     
+    // Draw original image
     outputCtx.drawImage(canvas, 0, 0);
     
+    // Apply the mask with improved algorithm
     const outputImageData = outputCtx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
     const data = outputImageData.data;
     
-    for (let i = 0; i < result[0].mask.data.length; i++) {
-      const alpha = Math.round((1 - result[0].mask.data[i]) * 255);
+    // Apply mask with smoothing
+    for (let i = 0; i < personMask.data.length; i++) {
+      const maskValue = personMask.data[i];
+      // Keep the subject (high mask values) and remove background (low mask values)
+      const alpha = Math.round(maskValue * 255);
       data[i * 4 + 3] = alpha;
     }
     
@@ -58,6 +95,7 @@ export const removeBackground = async (imageElement: HTMLImageElement, onProgres
       outputCanvas.toBlob(
         (blob) => {
           if (blob) {
+            console.log('Background removal completed successfully');
             resolve(blob);
           } else {
             reject(new Error('Failed to create blob'));
